@@ -1,0 +1,75 @@
+{
+    "name": "erlandmuchasaj/laravel-gzip",
+    "type": "library",
+    "description": "Gzip your responses.",
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "homepage": "https://github.com/erlandmuchasaj/laravel-gzip",
+    "license": "MIT",
+    "keywords": [
+        "optimize",
+        "gzip",
+        "response",
+        "laravel",
+        "library",
+        "cms",
+        "emcms",
+        "package"
+    ],
+    "autoload": {
+        "psr-4": {
+            "ErlandMuchasaj\\LaravelGzip\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "ErlandMuchasaj\\LaravelGzip\\GzipServiceProvider"
+            ]
+        }
+    },
+    "authors": [
+        {
+            "name": "Erland Muchasaj",
+            "email": "erland.muchasaj@gmail.com",
+            "homepage": "https://erlandmuchasaj.tech/",
+            "role": "Developer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/erlandmuchasaj/laravel-gzip/issues",
+        "source": "https://github.com/erlandmuchasaj/laravel-gzip",
+        "email": "erland.muchasaj@gmail.com",
+        "irc": "irc://irc.freenode.org/composer"
+    },
+    "funding": [
+        {
+            "type": "patreon",
+            "url": "https://www.patreon.com/erlandmuchasaj"
+        },
+        {
+            "type": "Ko-fi",
+            "url": "https://ko-fi.com/erlandmuchasaj"
+        },
+        {
+            "type": "PayPal",
+            "url": "https://paypal.me/emcms?country.x=AL&locale.x=en_US"
+        }
+    ],
+    "config": {
+        "sort-packages": true,
+        "preferred-install": "dist",
+        "optimize-autoloader": true
+    },
+    "require": {
+        "php": "^8.0",
+        "ext-exif": "*",
+        "ext-fileinfo": "*",
+        "ext-json": "*",
+        "nesbot/carbon": "^2",
+        "illuminate/http": "^8|^9|^10",
+        "illuminate/support": "^8|^9|^10",
+        "illuminate/contracts": "^8|^9|^10",
+        "illuminate/filesystem": "^8|^9|^10"
+    }
+}
