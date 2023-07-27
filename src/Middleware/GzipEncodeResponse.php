@@ -16,11 +16,7 @@ final class GzipEncodeResponse
     {
         // @return Response|RedirectResponse|JsonResponse|ResponseAlias
         $response = $next($request);
-
-        if (config('app.env') !== 'production') {
-            return $response;
-        }
-
+        
         if (! $this->shouldGzipResponse()) {
             return $response;
         }
@@ -60,7 +56,7 @@ final class GzipEncodeResponse
     }
 
     /**
-     * Decides if we should gzip the response or not.
+     * Get the gzip encoding level.
      */
     private function gzipLevel(): int
     {
