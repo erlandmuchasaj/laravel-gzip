@@ -36,7 +36,7 @@ protected $middlewareGroups = [
 
 ## Benchmark
 
-I test this package with a fresh installed laravel in homepage and got:
+I tested this package with a fresh installed laravel in homepage and got:
 
 `No Gzip => 72.9kb`
 

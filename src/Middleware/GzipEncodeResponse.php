@@ -17,6 +17,10 @@ final class GzipEncodeResponse
         // @return Response|RedirectResponse|JsonResponse|ResponseAlias
         $response = $next($request);
 
+        if (config('app.env') !== 'production') {
+            return $response;
+        }
+
         if (! $this->shouldGzipResponse()) {
             return $response;
         }
@@ -36,6 +40,7 @@ final class GzipEncodeResponse
 
                 $response->headers->add([
                     'Content-Encoding' => 'gzip',
+                    'Vary' => 'Accept-Encoding',
                     'Content-Length' => strlen($compressed),
                 ]);
             }
