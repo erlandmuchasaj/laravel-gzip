@@ -67,9 +67,9 @@
         "ext-fileinfo": "*",
         "ext-json": "*",
         "nesbot/carbon": "^2",
-        "illuminate/http": "^8|^9|^10",
-        "illuminate/support": "^8|^9|^10",
-        "illuminate/contracts": "^8|^9|^10",
-        "illuminate/filesystem": "^8|^9|^10"
+        "illuminate/http": "^8|^9|^10|^11",
+        "illuminate/support": "^8|^9|^10|^11",
+        "illuminate/contracts": "^8|^9|^10|^11",
+        "illuminate/filesystem": "^8|^9|^10|^11"
     }
 }
