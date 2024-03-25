@@ -71,5 +71,18 @@
         "illuminate/support": "^8|^9|^10|^11",
         "illuminate/contracts": "^8|^9|^10|^11",
         "illuminate/filesystem": "^8|^9|^10|^11"
+    },
+    "require-dev": {
+        "orchestra/testbench": "^9.0",
+        "phpunit/phpunit": "^11.0",
+        "rawr/phpunit-data-provider": "^3.3"
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "ErlandMuchasaj\\LaravelGzip\\Tests\\": "tests"
+        }
+    },
+    "scripts": {
+        "test": "vendor/bin/phpunit"
     }
 }
