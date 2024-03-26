@@ -16,8 +16,12 @@ final class GzipEncodeResponse
     {
         // @return Response|RedirectResponse|JsonResponse|ResponseAlias
         $response = $next($request);
-        
-        if (! $this->shouldGzipResponse()) {
+
+        if (! $this->shouldGzipResponse() ) {
+            return $response;
+        }
+
+        if (! app()->isProduction()) {
             return $response;
         }
 
