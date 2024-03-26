@@ -20,19 +20,31 @@ php artisan vendor:publish --provider="ErlandMuchasaj\LaravelGzip\GzipServicePro
 ## Usage
 
 This package has a very easy and straight-forward usage. 
-Just add the middleware to the `web` middleware group in `app/Http/Kernel.php`
+Just add the middleware to the ~~`web` middleware group~~  `$middleware` array in `app/Http/Kernel.php`
 like so:
 
 ```php
 
-protected $middlewareGroups = [
-    'web' => [
-        //...
-        \ErlandMuchasaj\LaravelGzip\Middleware\GzipEncodeResponse::class,
-    ],
+/**
+ * The application's global HTTP middleware stack.
+ *
+ * These middleware are run during every request to your application.
+ *
+ * @var array<int, class-string|string>
+ */
+protected $middleware = [
+    \ErlandMuchasaj\LaravelGzip\Middleware\GzipEncodeResponse::class,
+    //...
 ];
-
 ```
+> [!IMPORTANT]
+> We changed it from `web` middleware group to global `$middleware` array because we want to apply gzip to all requests 
+> and also, when provided in `web` group it caused debugbar not to work.
+> 
+> Also, if you are using  `spatie/laravel-cookie-consent` package, 
+> you should put this middleware before `\Spatie\CookieConsent\CookieConsentMiddleware::class` middleware.
+
+That's it! Now your responses will be gzipped.
 
 ## Benchmark
 

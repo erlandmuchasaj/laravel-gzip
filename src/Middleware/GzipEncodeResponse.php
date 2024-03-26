@@ -4,6 +4,7 @@ namespace ErlandMuchasaj\LaravelGzip\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -14,10 +15,10 @@ final class GzipEncodeResponse
      */
     public function handle(Request $request, Closure $next): mixed
     {
-        // @return Response|RedirectResponse|JsonResponse|ResponseAlias
+        // @return Response|RedirectResponse|JsonResponse|ResponseAlias|BinaryFileResponse|StreamedResponse
         $response = $next($request);
 
-        if (! $this->shouldGzipResponse() ) {
+        if (! $this->shouldGzipResponse()) {
             return $response;
         }
 
@@ -25,7 +26,15 @@ final class GzipEncodeResponse
             return $response;
         }
 
+        if ($this->gzipDebugEnabled()) {
+            return $response;
+        }
+
         if ($response instanceof BinaryFileResponse || $response instanceof StreamedResponse) {
+            return $response;
+        }
+
+        if (! $response instanceof Response) {
             return $response;
         }
 
@@ -51,6 +60,8 @@ final class GzipEncodeResponse
 
     /**
      * Decides if we should gzip the response or not.
+     *
+     * @return bool
      */
     private function shouldGzipResponse(): bool
     {
@@ -61,11 +72,25 @@ final class GzipEncodeResponse
 
     /**
      * Get the gzip encoding level.
+     * @return int
      */
     private function gzipLevel(): int
     {
         return config()->has('laravel-gzip.level')
             ? config('laravel-gzip.level')
             : 5;
+    }
+
+    /**
+     * Get the gzip debug enabled.
+     * If debugbar is enabled we do not gzip the response.
+     *
+     * @return bool
+     */
+    private function gzipDebugEnabled(): bool
+    {
+        return config()->has('laravel-gzip.debug')
+            ? config('laravel-gzip.debug')
+            : false;
     }
 }
