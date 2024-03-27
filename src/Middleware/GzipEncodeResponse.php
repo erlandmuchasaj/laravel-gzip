@@ -40,7 +40,7 @@ final class GzipEncodeResponse
 
         if (in_array('gzip', $request->getEncodings()) && function_exists('gzencode')) {
             $content = $response->getContent();
-            if ($content && ! empty($content)) {
+            if (! empty($content)) {
                 // 5 is a perfect compromise between size and CPU
                 $compressed = gzencode($content, $this->gzipLevel());
 
