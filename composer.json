@@ -73,6 +73,7 @@
         "illuminate/filesystem": "^8|^9|^10|^11"
     },
     "require-dev": {
+        "brianium/paratest": "^7.4",
         "orchestra/testbench": "^9.0",
         "phpunit/phpunit": "^11.0",
         "rawr/phpunit-data-provider": "^3.3"
@@ -83,6 +84,7 @@
         }
     },
     "scripts": {
-        "test": "vendor/bin/phpunit"
+        "test": "vendor/bin/phpunit",
+        "test-parallel": "vendor/bin/paratest"
     }
 }

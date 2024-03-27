@@ -4,9 +4,9 @@ namespace ErlandMuchasaj\LaravelGzip\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
-use Illuminate\Http\Response;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\Response;
 
 final class GzipEncodeResponse
 {
@@ -39,19 +39,21 @@ final class GzipEncodeResponse
         }
 
         if (in_array('gzip', $request->getEncodings()) && function_exists('gzencode')) {
+            $content = $response->getContent();
+            if ($content && ! empty($content)) {
+                // 5 is a perfect compromise between size and CPU
+                $compressed = gzencode($content, $this->gzipLevel());
 
-            // 5 is a perfect compromise between size and CPU
-            $compressed = gzencode((string) $response->getContent(), $this->gzipLevel());
+                if ($compressed) {
+                    // Get response length
+                    $response->setContent($compressed);
 
-            if ($compressed) {
-                // Get response length
-                $response->setContent($compressed);
-
-                $response->headers->add([
-                    'Content-Encoding' => 'gzip',
-                    'Vary' => 'Accept-Encoding',
-                    'Content-Length' => strlen($compressed),
-                ]);
+                    $response->headers->add([
+                        'Content-Encoding' => 'gzip',
+                        'Vary' => 'Accept-Encoding',
+                        'Content-Length' => strlen($compressed),
+                    ]);
+                }
             }
         }
 
@@ -65,9 +67,10 @@ final class GzipEncodeResponse
      */
     private function shouldGzipResponse(): bool
     {
-        return config()->has('laravel-gzip.enabled')
-            ? config('laravel-gzip.enabled')
-            : true;
+        return filter_var(
+            config('laravel-gzip.enabled', true),
+            FILTER_VALIDATE_BOOLEAN,
+        );
     }
 
     /**
@@ -76,9 +79,7 @@ final class GzipEncodeResponse
      */
     private function gzipLevel(): int
     {
-        return config()->has('laravel-gzip.level')
-            ? config('laravel-gzip.level')
-            : 5;
+        return intval(config('laravel-gzip.level', 5));
     }
 
     /**
@@ -89,8 +90,9 @@ final class GzipEncodeResponse
      */
     private function gzipDebugEnabled(): bool
     {
-        return config()->has('laravel-gzip.debug')
-            ? config('laravel-gzip.debug')
-            : false;
+        return filter_var(
+            config('laravel-gzip.debug', false),
+            FILTER_VALIDATE_BOOLEAN,
+        );
     }
 }
