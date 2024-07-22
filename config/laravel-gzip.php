@@ -26,4 +26,10 @@ return [
 
     'debug' => env('APP_DEBUG', false),
 
+
+    /*
+     | The minimum content length that we apply the gZip 
+     */
+    'minimum_content_length' => 1024
+
 ];

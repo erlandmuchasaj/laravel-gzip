@@ -38,6 +38,10 @@ final class GzipEncodeResponse
             return $response;
         }
 
+        if(! $this->hasMinimumContentLength($response)) {
+            return $response;
+        }
+
         if (in_array('gzip', $request->getEncodings()) && function_exists('gzencode')) {
             $content = $response->getContent();
             if (! empty($content)) {
@@ -71,6 +75,12 @@ final class GzipEncodeResponse
             config('laravel-gzip.enabled', true),
             FILTER_VALIDATE_BOOLEAN,
         );
+    }
+
+
+    protected function minimumContentLength(): int
+    {
+        return intval(config('externaluser.gzip.minimum_content_length', 1024));
     }
 
     /**
