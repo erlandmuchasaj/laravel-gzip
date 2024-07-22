@@ -80,7 +80,7 @@ final class GzipEncodeResponse
 
     protected function minimumContentLength(): int
     {
-        return intval(config('externaluser.gzip.minimum_content_length', 1024));
+        return intval(config('laravel-gzip.minimum_content_length', 1024));
     }
 
     /**
