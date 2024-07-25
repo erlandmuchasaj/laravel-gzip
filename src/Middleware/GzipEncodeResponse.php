@@ -105,4 +105,12 @@ final class GzipEncodeResponse
             FILTER_VALIDATE_BOOLEAN,
         );
     }
+
+    protected function hasMinimumContentLength(Response $response): bool
+    {
+        return filter_var(
+            strlen((string)$response->getContent()) >= $this->minimumContentLength(),
+            FILTER_VALIDATE_BOOLEAN,
+        );
+    }
 }
