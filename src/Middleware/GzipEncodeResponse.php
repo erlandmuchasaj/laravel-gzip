@@ -17,7 +17,6 @@ final class GzipEncodeResponse
     {
         // @return Response|RedirectResponse|JsonResponse|ResponseAlias|BinaryFileResponse|StreamedResponse
         $response = $next($request);
-
         if (! $this->shouldGzipResponse()) {
             return $response;
         }
@@ -38,7 +37,7 @@ final class GzipEncodeResponse
             return $response;
         }
 
-        if(! $this->hasMinimumContentLength($response)) {
+        if (! $this->hasMinimumContentLength($response)) {
             return $response;
         }
 
