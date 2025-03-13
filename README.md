@@ -20,9 +20,22 @@ php artisan vendor:publish --provider="ErlandMuchasaj\LaravelGzip\GzipServicePro
 ## Usage
 
 This package has a very easy and straight-forward usage. 
-Just add the middleware to the ~~`web` middleware group~~  `$middleware` array in `app/Http/Kernel.php`
-like so:
 
+### Laravel v11+
+Just add the middleware in `bootstrap/app.php`, like so:
+```php
+return Application::configure(basePath: dirname(__DIR__))
+    ->withRouting(
+        // ...
+    )
+    ->withMiddleware(function (Middleware $middleware) {
+        $middleware->append(\ErlandMuchasaj\LaravelGzip\Middleware\GzipEncodeResponse::class);
+    })
+    // ...
+```
+
+### Laravel v10 and older
+Just add the middleware to the `$middleware` array in `app/Http/Kernel.php` like so:
 ```php
 
 /**
@@ -37,12 +50,14 @@ protected $middleware = [
     //...
 ];
 ```
+
 > [!IMPORTANT]
-> We changed it from `web` middleware group to global `$middleware` array because we want to apply gzip to all requests 
-> and also, when provided in `web` group it caused debugbar not to work.
+> In a previous version, we recommended adding the middleware to the `web` middleware group. **Now**, we recommend adding
+> to global `$middleware` because we want to apply gzip to all requests. Additionally, registering the middleware in the 
+> `web` group caused debugbar to break.
 > 
-> Also, if you are using  `spatie/laravel-cookie-consent` package, 
-> you should put this middleware before `\Spatie\CookieConsent\CookieConsentMiddleware::class` middleware.
+> **Also**, if you are using `spatie/laravel-cookie-consent` package, you should register this middleware before the 
+> `\Spatie\CookieConsent\CookieConsentMiddleware::class` middleware.
 
 That's it! Now your responses will be gzipped.
 
