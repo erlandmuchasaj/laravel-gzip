@@ -5,8 +5,8 @@ namespace ErlandMuchasaj\LaravelGzip\Middleware;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
-use Symfony\Component\HttpFoundation\StreamedResponse;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 final class GzipEncodeResponse
 {
@@ -17,11 +17,11 @@ final class GzipEncodeResponse
     {
         // @return Response|RedirectResponse|JsonResponse|ResponseAlias|BinaryFileResponse|StreamedResponse
         $response = $next($request);
-        if (! $this->shouldGzipResponse()) {
+        if (!$this->shouldGzipResponse()) {
             return $response;
         }
 
-        if (! app()->isProduction()) {
+        if (!app()->isProduction()) {
             return $response;
         }
 
@@ -33,17 +33,17 @@ final class GzipEncodeResponse
             return $response;
         }
 
-        if (! $response instanceof Response) {
+        if (!$response instanceof Response) {
             return $response;
         }
 
-        if (! $this->hasMinimumContentLength($response)) {
+        if (!$this->hasMinimumContentLength($response)) {
             return $response;
         }
 
         if (in_array('gzip', $request->getEncodings()) && function_exists('gzencode')) {
             $content = $response->getContent();
-            if (! empty($content)) {
+            if (!empty($content)) {
                 // 5 is a perfect compromise between size and CPU
                 $compressed = gzencode($content, $this->gzipLevel());
 
@@ -53,8 +53,8 @@ final class GzipEncodeResponse
 
                     $response->headers->add([
                         'Content-Encoding' => 'gzip',
-                        'Vary' => 'Accept-Encoding',
-                        'Content-Length' => strlen($compressed),
+                        'Vary'             => 'Accept-Encoding',
+                        'Content-Length'   => strlen($compressed),
                     ]);
                 }
             }
@@ -76,7 +76,6 @@ final class GzipEncodeResponse
         );
     }
 
-
     protected function minimumContentLength(): int
     {
         return intval(config('laravel-gzip.minimum_content_length', 1024));
@@ -84,6 +83,7 @@ final class GzipEncodeResponse
 
     /**
      * Get the gzip encoding level.
+     *
      * @return int
      */
     private function gzipLevel(): int
@@ -108,7 +108,7 @@ final class GzipEncodeResponse
     protected function hasMinimumContentLength(Response $response): bool
     {
         return filter_var(
-            strlen((string)$response->getContent()) >= $this->minimumContentLength(),
+            strlen((string) $response->getContent()) >= $this->minimumContentLength(),
             FILTER_VALIDATE_BOOLEAN,
         );
     }
