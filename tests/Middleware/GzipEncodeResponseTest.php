@@ -20,13 +20,13 @@ class GzipEncodeResponseTest extends TestCase
     {
         return [
             [
-                []
+                [],
             ],
             [
-                ['HTTP_ACCEPT_ENCODING' => 'brotli']
+                ['HTTP_ACCEPT_ENCODING' => 'brotli'],
             ],
             [
-                ['HTTP_ACCEPT_ENCODING'=> 'gzip']
+                ['HTTP_ACCEPT_ENCODING'=> 'gzip'],
             ],
         ];
     }
@@ -35,10 +35,10 @@ class GzipEncodeResponseTest extends TestCase
     {
         return [
             [
-                false
+                false,
             ],
             [
-                true
+                true,
             ],
         ];
     }
@@ -47,11 +47,11 @@ class GzipEncodeResponseTest extends TestCase
     {
         return [
             [
-                1
+                1,
             ],
             [
-                9
-            ]
+                9,
+            ],
         ];
     }
 
@@ -59,10 +59,10 @@ class GzipEncodeResponseTest extends TestCase
     {
         return [
             [
-                'other'
+                'other',
             ],
             [
-                'production'
+                'production',
             ],
         ];
     }
@@ -71,10 +71,10 @@ class GzipEncodeResponseTest extends TestCase
     {
         return [
             [
-                true
+                true,
             ],
             [
-                false
+                false,
             ],
         ];
     }
@@ -91,7 +91,7 @@ class GzipEncodeResponseTest extends TestCase
                 }),
             ],
             [
-                new BinaryFileResponse(__DIR__ . '/example.txt'),
+                new BinaryFileResponse(__DIR__.'/example.txt'),
             ],
             [
                 new JsonResponse(['test' => 'test']),
@@ -123,12 +123,11 @@ class GzipEncodeResponseTest extends TestCase
         array $acceptEncoding,
         SymfonyResponse $middlewareResponse,
         ?int $gzipCompressionLevel,
-    ): void
-    {
+    ): void {
         config([
             'laravel-gzip.enabled' => $gzipEnabled,
-            'laravel-gzip.level' => $gzipCompressionLevel,
-            'laravel-gzip.debug' => $debugEnabled,
+            'laravel-gzip.level'   => $gzipCompressionLevel,
+            'laravel-gzip.debug'   => $debugEnabled,
         ]);
 
         $this->app['env'] = $environment;
@@ -138,7 +137,7 @@ class GzipEncodeResponseTest extends TestCase
             server: $acceptEncoding
         );
 
-        $responseCanBeGzipped = ! in_array(
+        $responseCanBeGzipped = !in_array(
             get_class($middlewareResponse),
             [BinaryFileResponse::class, StreamedResponse::class]
         );
@@ -162,12 +161,12 @@ class GzipEncodeResponseTest extends TestCase
         $responseShouldBeGzipped = $gzipEnabled
             && $acceptEncodingIsGzip
             && $environment === 'production'
-            && ! $debugEnabled
+            && !$debugEnabled
             && $responseCanBeGzipped
-            && ! empty($middlewareResponse->getContent());
+            && !empty($middlewareResponse->getContent());
 
         if ($responseShouldBeGzipped) {
-            $this->assertEquals('gzip',$result->headers->get('Content-Encoding'));
+            $this->assertEquals('gzip', $result->headers->get('Content-Encoding'));
             $this->assertEquals(
                 md5(
                     gzencode(
