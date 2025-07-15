@@ -54,10 +54,15 @@ protected $middleware = [
 > [!IMPORTANT]
 > In a previous version, we recommended adding the middleware to the `web` middleware group. **Now**, we recommend adding
 > to global `$middleware` because we want to apply gzip to all requests. Additionally, registering the middleware in the 
-> `web` group caused debugbar to break.
+> `web` group caused debugger to break.
 > 
 > **Also**, if you are using `spatie/laravel-cookie-consent` package, you should register this middleware before the 
 > `\Spatie\CookieConsent\CookieConsentMiddleware::class` middleware.
+
+
+> [!PS]
+> To see the package working, the application env should be `APP_ENV=production` and the `APP_DEBUG=false`
+
 
 That's it! Now your responses will be gzipped.
 

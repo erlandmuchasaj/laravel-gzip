@@ -64,6 +64,7 @@
     "require": {
         "php": "^8.0",
         "ext-exif": "*",
+        "ext-zlib": "*",
         "ext-fileinfo": "*",
         "ext-json": "*",
         "nesbot/carbon": "^2|^3",

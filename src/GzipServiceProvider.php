@@ -2,6 +2,7 @@
 
 namespace ErlandMuchasaj\LaravelGzip;
 
+use ErlandMuchasaj\LaravelGzip\Middleware\GzipEncodeResponse;
 use Illuminate\Support\ServiceProvider;
 
 class GzipServiceProvider extends ServiceProvider
@@ -15,18 +16,24 @@ class GzipServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->mergeConfigFrom(
-            __DIR__.'/../config/laravel-gzip.php',
+            __DIR__.'/../config/'.static::$abstract.'.php',
             static::$abstract
         );
+
+        $this->app->singleton(static::$abstract, function ($app) {
+            return new GzipEncodeResponse;
+        });
     }
 
     public function boot(): void
     {
         if ($this->app->runningInConsole()) {
             $this->publishes([
-                __DIR__.'/../config/laravel-gzip.php' => config_path(static::$abstract.'.php'),
+                __DIR__.'/../config/'.static::$abstract.'.php' => config_path(static::$abstract.'.php'),
             ], 'config');
         }
+
+        $this->app['router']->aliasMiddleware('gzip', GzipEncodeResponse::class);
     }
 
     /**
