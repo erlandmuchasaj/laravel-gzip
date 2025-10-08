@@ -23,6 +23,8 @@ class GzipServiceProvider extends ServiceProvider
         $this->app->singleton(static::$abstract, function ($app) {
             return new GzipEncodeResponse;
         });
+
+        $this->app->alias(GzipEncodeResponse::class, static::$abstract);
     }
 
     public function boot(): void
@@ -43,6 +45,9 @@ class GzipServiceProvider extends ServiceProvider
      */
     public function provides(): array
     {
-        return [static::$abstract];
+        return [
+            static::$abstract,
+            GzipEncodeResponse::class,
+        ];
     }
 }

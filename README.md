@@ -4,11 +4,32 @@ Laravel Gzip is a simple and effective way to gzip your response for a better pe
 
 ## Installation
 
+### Installing the Package
 You can install the package via composer:
 
 ```bash
 composer require erlandmuchasaj/laravel-gzip
 ```
+
+### Installing Brotli Extension (Optional but Recommended)
+Brotli provides 15-20% better compression than Gzip and is supported by all modern browsers.
+To install the Brotli extension, you can use PECL:
+
+#### macOS (using Homebrew):
+```bash
+pecl install brotli
+``` 
+
+#### Ubuntu/Debian:
+```bash
+sudo apt-get install php-brotli
+# or
+sudo pecl install brotli
+```
+
+> [!NOTE]  
+> If Brotli is not available, the package will automatically fall back to Gzip compression.
+> 
 
 ## Config file
 Publish the configuration file using artisan.

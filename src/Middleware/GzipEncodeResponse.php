@@ -19,13 +19,32 @@ final class GzipEncodeResponse
         $this->config = config('laravel-gzip', []);
     }
 
-        /**
+    /**
      * Handle an incoming request.
      */
     public function handle(Request $request, Closure $next): mixed
     {
+
         // @return Response|RedirectResponse|JsonResponse|ResponseAlias|BinaryFileResponse|StreamedResponse
         $response = $next($request);
+
+        // dump($request, $response);
+        // dump([
+        //     'shouldGzipResponse' => $this->shouldGzipResponse(),
+        //     'skipEnvironment' => $this->skipEnvironment(),
+        //     'gzipDebugEnabled' => $this->gzipDebugEnabled(),
+        //     'isCompressibleResponseType' => $this->isCompressibleResponseType($response),
+        //     'clientSupportsCompression' => $this->clientSupportsCompression($request),
+        //     '$response instanceof Response' => ($response instanceof Response),
+        //     'Has Content-Encoding' => $response->headers->has('Content-Encoding'),
+        //     'Has Range' => $request->headers->has('Range'),
+        //     'headers' => $request->headers,
+        //     'hasMinimumContentLength' => $this->hasMinimumContentLength($response),
+        //     'shouldCompressContentType' => $this->shouldCompressContentType($response),
+        //     'isPathExcluded' => $this->isPathExcluded($request),
+        //     'isRedirection' => $response->isRedirection(),
+        //     'shouldCompress' => $this->shouldCompress($request, $response),
+        // ]);
 
         if (!$this->shouldCompress($request, $response)) {
             return $response;
@@ -36,65 +55,105 @@ final class GzipEncodeResponse
             return $response;
         }
 
-        $etag = sha1($content);
-        if ($request->headers->get('If-None-Match') === $etag) {
-            return response()->noContent(304)->withHeaders([
-                'ETag' => $etag,
-                'Content-Encoding' => 'gzip',
-                'Vary' => 'Accept-Encoding',
-            ]);
+        // Determine best encoding method
+        $encoding = $this->getBestEncoding($request);
+        if ($encoding === null) {
+            return $response;
+        }
+
+        // Handle ETag for caching
+        $etag = $this->generateETag($content, $encoding);
+        if ($this->handleETagMatch($request, $etag)) {
+            return response()
+                ->noContent(Response::HTTP_NOT_MODIFIED)
+                ->withHeaders([
+                    'ETag' => $etag,
+                    'Content-Encoding' => 'gzip',
+                    'Vary' => 'Accept-Encoding',
+                ]);
         }
 
         $content = $this->prepareContentForCompression($content, $response);
 
-        // Level 5 compression is a perfect compromise between size and CPU
-        $compressed = gzencode($content, $this->gzipLevel());
+        // Attempt compression
+        // Level 6 compression is a perfect compromise between size and CPU
+        $compressed = $this->compressContent($content, $encoding);
         if ($compressed === false) {
+            if ($this->shouldLog()) {
+                Log::warning('Gzip compression failed for response');
+            }
             return $response;
         }
 
         // Check if the compression ratio is worthwhile
         if (!$this->compressionWorthwhile($content, $compressed)) {
+            if ($this->shouldLog()) {
+                Log::debug('Gzip compression not worthwhile, serving uncompressed');
+            }
             return $response;
         }
 
         $response->setContent($compressed);
         $response->headers->set('ETag', $etag);
-        $this->setCompressionHeaders($response, strlen($compressed));
+        $this->setCompressionHeaders($response, strlen($compressed), $encoding);
 
         if ($this->shouldLog()) {
             $this->logCompressionStats(strlen($content), strlen($compressed));
         }
 
+        // dump($response);
+
         return $response;
     }
 
-    private function setCompressionHeaders(Response $response, int $length): void
+    /**
+     * Generate ETag for content
+     */
+    private function generateETag(string $content, string $encoding): string
+    {
+        return '"' . hash('xxh128', $content) . '-' . $encoding . '"';
+    }
+
+    /**
+     * Check if ETag matches and return early if possible
+     */
+    private function handleETagMatch(Request $request, string $etag): bool
+    {
+        $clientETag = $request->headers->get('If-None-Match');
+        return $clientETag === $etag;
+    }
+
+    private function setCompressionHeaders(Response $response, int $length, string $encoding): void
     {
         $response->headers->add([
-            'Content-Encoding' => 'gzip',
+            'Content-Encoding' => $encoding,
             'Content-Length' => $length,
         ]);
 
         // Handle Vary header properly
         $vary = $response->headers->get('Vary', '');
         $variations = array_filter(array_map('trim', explode(',', $vary)));
-
         if (! in_array('Accept-Encoding', $variations)) {
             $variations[] = 'Accept-Encoding';
             $response->headers->set('Vary', implode(', ', $variations));
+        }
+
+        // Add cache control if not present
+        if (!$response->headers->has('Cache-Control') && $this->shouldSetCacheControl()) {
+            $maxAge = $this->cacheControlMaxAge();
+            $response->headers->set('Cache-Control', "public, max-age=$maxAge");
         }
     }
 
     private function shouldCompress(Request $request, $response): bool
     {
         // check if the package is enabled
-        if (! $this->shouldGzipResponse()) {
+        if (!$this->shouldGzipResponse()) {
             return false;
         }
 
         // Environment checks
-        if (app()->isLocal() || app()->runningUnitTests()) {
+        if ($this->skipEnvironment()) {
             return false;
         }
 
@@ -104,23 +163,22 @@ final class GzipEncodeResponse
         }
 
         // Response type checks for a steamed file we do not compress
-        if ($response instanceof BinaryFileResponse ||
-            $response instanceof StreamedResponse ||
-            !$response instanceof Response
-        ) {
+        if (!$this->isCompressibleResponseType($response)) {
             return false;
         }
 
         // Client capability checks
-        if (
-            !in_array('gzip', $request->getEncodings()) ||
-            !function_exists('gzencode')
-        ) {
+        if (!$this->clientSupportsCompression($request)) {
             return false;
         }
 
         // Existing encoding check
-        if ($response->headers->has('Content-Encoding')) {
+        if ($response instanceof Response && $response->headers->has('Content-Encoding')) {
+            return false;
+        }
+
+        // Don't compress when client sent Range requests (byte ranges)
+        if ($request->headers->has('Range')) {
             return false;
         }
 
@@ -130,11 +188,90 @@ final class GzipEncodeResponse
         }
 
         // Content type checks
-        if (! $this->shouldCompressContentType($response)) {
+        if (!$this->shouldCompressContentType($response)) {
             return false;
         }
 
-        return !$response->isRedirection();
+        // Check if path is excluded
+        if ($this->isPathExcluded($request)) {
+            return false;
+        }
+
+        // Don't compress redirects
+        if ($response->isRedirection()) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Check if current environment should skip compression
+     */
+    private function skipEnvironment(): bool
+    {
+        $skipLocal = $this->config['skip_local'] ?? true;
+        $skipTesting = $this->config['skip_testing'] ?? true;
+
+        if ($skipLocal && app()->isLocal()) {
+            return true;
+        }
+
+        if ($skipTesting && app()->runningUnitTests()) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Check if response type can be compressed
+     */
+    private function isCompressibleResponseType($response): bool
+    {
+        return $response instanceof Response
+            && !$response instanceof BinaryFileResponse
+            && !$response instanceof StreamedResponse;
+    }
+
+    /**
+     * Check if client supports gzip
+     */
+    private function clientSupportsCompression(Request $request): bool
+    {
+        $acceptEncoding = $request->headers->get('Accept-Encoding', '');
+
+        // Check for Brotli support and gZip
+        if (
+            (str_contains($acceptEncoding, 'br') && function_exists('brotli_compress')) ||
+            (str_contains($acceptEncoding, 'gzip') && function_exists('gzencode'))
+        ) {
+            return true;
+        }
+
+        return false;
+    }
+
+
+    /**
+     * Check if path is excluded from compression
+     */
+    private function isPathExcluded(Request $request): bool
+    {
+        $excludedPaths = $this->config['excluded_paths'] ?? [];
+        $currentPath = $request->path();
+
+        if (empty($excludedPaths)) {
+            return false;
+        }
+
+        foreach ($excludedPaths as $pattern) {
+            if (Str::is($pattern, $currentPath)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -143,18 +280,31 @@ final class GzipEncodeResponse
     private function shouldCompressContentType(Response $response): bool
     {
         $contentType = $response->headers->get('Content-Type', '');
-        $nonCompressibleTypes = $this->config['excluded_mime_types'] ?? [];
+        if (empty($contentType)) {
+            return false;
+        }
 
+        $nonCompressibleTypes = $this->config['excluded_mime_types'] ?? [];
         if (Str::startsWith($contentType, $nonCompressibleTypes)) {
             return false;
         }
 
         // Only compress known compressible types
         $compressibleTypes = $this->config['compressible_mime_types'] ?? $this->getDefaultCompressibleTypes();
-        if (Str::startsWith($contentType, $compressibleTypes)) {
-            return true;
-        }
 
+        return $this->matchesMimeType($contentType, $compressibleTypes);
+    }
+
+    /**
+     * Check if content type matches any of the given patterns
+     */
+    private function matchesMimeType(string $contentType, array $patterns): bool
+    {
+        foreach ($patterns as $pattern) {
+            if (Str::startsWith($contentType, $pattern)) {
+                return true;
+            }
+        }
         return false;
     }
 
@@ -164,11 +314,14 @@ final class GzipEncodeResponse
             'text/',
             'application/json',
             'application/javascript',
-            'application/xml',
             'application/x-javascript',
+            'application/xml',
             'application/rss+xml',
             'application/atom+xml',
+            'application/xhtml+xml',
+            'application/ld+json',
             'image/svg+xml',
+            'font/woff2',
         ];
     }
 
@@ -179,7 +332,7 @@ final class GzipEncodeResponse
     {
         $contentType = $response->headers->get('Content-Type', '');
 
-        if (Str::startsWith($contentType, 'text/css')) {
+        if (Str::startsWith($contentType, ['text/css', 'text/javascript', 'application/javascript'])) {
             // Ensure UTF-8 encoding for CSS
             if (!mb_check_encoding($content, 'UTF-8')) {
                 $content = mb_convert_encoding($content, 'UTF-8', 'auto');
@@ -187,16 +340,29 @@ final class GzipEncodeResponse
 
             // Ensure the charset is set
             if (!Str::contains($contentType, 'charset')) {
-                $response->headers->set('Content-Type', 'text/css; charset=UTF-8');
+                $charset = Str::startsWith($contentType, 'text/css') ? 'text/css' :
+                    (Str::startsWith($contentType, 'text/javascript') ? 'text/javascript' : 'application/javascript');
+                $response->headers->set('Content-Type', $charset . '; charset=UTF-8');
             }
         }
 
         return $content;
     }
 
+    /**
+     * Check if compression ratio is worthwhile
+     */
     private function compressionWorthwhile(string $original, string $compressed): bool
     {
-        $ratio = strlen($compressed) / strlen($original);
+        $originalSize = strlen($original);
+        $compressedSize = strlen($compressed);
+
+        // Don't use compression if it actually increases size
+        if ($compressedSize >= $originalSize) {
+            return false;
+        }
+
+        $ratio = $compressedSize / $originalSize;
         $minRatio = $this->config['minimum_compression_ratio'] ?? 0.95;
 
         return $ratio < $minRatio;
@@ -209,10 +375,14 @@ final class GzipEncodeResponse
     {
         $ratio = $originalSize > 0 ? round(($compressedSize / $originalSize) * 100, 2) : 0;
         $saved = $originalSize - $compressedSize;
+        $savedKb = round($saved / 1024, 2);
 
-        Log::debug("Gzip compression: $originalSize bytes → $compressedSize bytes ($ratio%), saved $saved bytes");
+        Log::debug("Gzip: {$originalSize}B → {$compressedSize}B ($ratio%), saved {$savedKb}KB");
     }
 
+    /**
+     * Check if response meets minimum content length
+     */
     protected function hasMinimumContentLength(Response $response): bool
     {
         $content = $response->getContent();
@@ -238,15 +408,28 @@ final class GzipEncodeResponse
      * Get the gzip encoding level.
      * @return int
      */
-    private function gzipLevel(): int
+    private function compressLevel(): int
     {
         $level = (int) ($this->config['level'] ?? 5);
         return max(1, min(9, $level));
     }
 
+    /**
+     * Check if logging is enabled
+     */
     private function shouldLog(): bool
     {
-        return (bool) $this->config['log'];
+        return (bool) ($this->config['log'] ?? false);
+    }
+
+    private function shouldSetCacheControl(): bool
+    {
+        return (bool) ($this->config['set_cache_control'] ?? false);
+    }
+
+    private function cacheControlMaxAge(): int
+    {
+        return (int) ($this->config['cache_max_age'] ?? 86400);
     }
 
     /**
@@ -257,7 +440,59 @@ final class GzipEncodeResponse
      */
     private function gzipDebugEnabled(): bool
     {
-        return (bool) $this->config['debug'];
+        return (bool) ($this->config['debug'] ?? false);
+    }
+
+    private function getBestEncoding(Request $request): ?string
+    {
+        $acceptEncoding = $request->headers->get('Accept-Encoding', '');
+
+        // Prefer Brotli over Gzip if supported
+        if (str_contains($acceptEncoding, 'br') && function_exists('brotli_compress')) {
+            return 'br';
+        }
+
+        if (str_contains($acceptEncoding, 'gzip') && function_exists('gzencode')) {
+            return 'gzip';
+        }
+
+        return null;
+    }
+
+    /**
+     * Compress content based on encoding method
+     */
+    private function compressContent(string $content, string $encoding): string|false
+    {
+        return match($encoding) {
+            'br' => $this->compressBrotli($content),
+            'gzip' => $this->compressGzip($content),
+            default => false,
+        };
+    }
+
+    /**
+     * Compress content using Brotli
+     */
+    private function compressBrotli(string $content): string|false
+    {
+        if (!function_exists('brotli_compress')) {
+            return false;
+        }
+
+        return brotli_compress($content,  $this->compressLevel());
+    }
+
+    /**
+     * Compress content using Gzip
+     */
+    private function compressGzip(string $content): string|false
+    {
+        if (!function_exists('gzencode')) {
+            return false;
+        }
+
+        return gzencode($content, $this->compressLevel());
     }
 
 }
