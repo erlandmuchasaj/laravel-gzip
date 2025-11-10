@@ -13,6 +13,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 final class GzipEncodeResponse
 {
     private array $config;
+    private ?bool $hasBrotli = null;
+    private ?bool $hasGzip = null;
 
     public function __construct()
     {
@@ -24,6 +26,7 @@ final class GzipEncodeResponse
      */
     public function handle(Request $request, Closure $next): mixed
     {
+
 
         // @return Response|RedirectResponse|JsonResponse|ResponseAlias|BinaryFileResponse|StreamedResponse
         $response = $next($request);
@@ -55,14 +58,18 @@ final class GzipEncodeResponse
             return $response;
         }
 
+
+
         // Determine best encoding method
         $encoding = $this->getBestEncoding($request);
         if ($encoding === null) {
             return $response;
         }
 
+
         // Handle ETag for caching
         $etag = $this->generateETag($content, $encoding);
+
         if ($this->handleETagMatch($request, $etag)) {
             return response()
                 ->noContent(Response::HTTP_NOT_MODIFIED)
@@ -74,7 +81,6 @@ final class GzipEncodeResponse
         }
 
         $content = $this->prepareContentForCompression($content, $response);
-
         // Attempt compression
         // Level 6 compression is a perfect compromise between size and CPU
         $compressed = $this->compressContent($content, $encoding);
@@ -93,6 +99,7 @@ final class GzipEncodeResponse
             return $response;
         }
 
+
         $response->setContent($compressed);
         $response->headers->set('ETag', $etag);
         $this->setCompressionHeaders($response, strlen($compressed), $encoding);
@@ -100,8 +107,6 @@ final class GzipEncodeResponse
         if ($this->shouldLog()) {
             $this->logCompressionStats(strlen($content), strlen($compressed));
         }
-
-        // dump($response);
 
         return $response;
     }
@@ -111,7 +116,12 @@ final class GzipEncodeResponse
      */
     private function generateETag(string $content, string $encoding): string
     {
-        return '"' . hash('xxh128', $content) . '-' . $encoding . '"';
+        // Use xxh128 if available (PHP 8.1+), fallback to md5 for PHP 8.0
+        $hash = function_exists('hash') && in_array('xxh128', hash_algos(), true)
+            ? hash('xxh128', $content)
+            : md5($content);
+
+        return '"' . $hash . '-' . $encoding . '"';
     }
 
     /**
@@ -243,13 +253,35 @@ final class GzipEncodeResponse
 
         // Check for Brotli support and gZip
         if (
-            (str_contains($acceptEncoding, 'br') && function_exists('brotli_compress')) ||
-            (str_contains($acceptEncoding, 'gzip') && function_exists('gzencode'))
+            (str_contains($acceptEncoding, 'br') && $this->hasBrotliSupport()) ||
+            (str_contains($acceptEncoding, 'gzip') && $this->hasGzipSupport())
         ) {
             return true;
         }
 
         return false;
+    }
+
+    /**
+     * Check if Brotli is available (cache the result)
+     */
+    private function hasBrotliSupport(): bool
+    {
+        if ($this->hasBrotli === null) {
+            $this->hasBrotli = function_exists('brotli_compress');
+        }
+        return $this->hasBrotli;
+    }
+
+    /**
+     * Check if Gzip is available (cache the result)
+     */
+    private function hasGzipSupport(): bool
+    {
+        if ($this->hasGzip === null) {
+            $this->hasGzip = function_exists('gzencode');
+        }
+        return $this->hasGzip;
     }
 
 
@@ -448,11 +480,11 @@ final class GzipEncodeResponse
         $acceptEncoding = $request->headers->get('Accept-Encoding', '');
 
         // Prefer Brotli over Gzip if supported
-        if (str_contains($acceptEncoding, 'br') && function_exists('brotli_compress')) {
+        if (str_contains($acceptEncoding, 'br') && $this->hasBrotliSupport()) {
             return 'br';
         }
 
-        if (str_contains($acceptEncoding, 'gzip') && function_exists('gzencode')) {
+        if (str_contains($acceptEncoding, 'gzip') && $this->hasGzipSupport()) {
             return 'gzip';
         }
 
@@ -464,11 +496,15 @@ final class GzipEncodeResponse
      */
     private function compressContent(string $content, string $encoding): string|false
     {
-        return match($encoding) {
-            'br' => $this->compressBrotli($content),
-            'gzip' => $this->compressGzip($content),
-            default => false,
-        };
+        if ($encoding === 'br') {
+            return $this->compressBrotli($content);
+        }
+        
+        if ($encoding === 'gzip') {
+            return $this->compressGzip($content);
+        }
+        
+        return false;
     }
 
     /**
@@ -476,7 +512,7 @@ final class GzipEncodeResponse
      */
     private function compressBrotli(string $content): string|false
     {
-        if (!function_exists('brotli_compress')) {
+        if (!$this->hasBrotliSupport()) {
             return false;
         }
 
@@ -488,7 +524,7 @@ final class GzipEncodeResponse
      */
     private function compressGzip(string $content): string|false
     {
-        if (!function_exists('gzencode')) {
+        if (!$this->hasGzipSupport()) {
             return false;
         }
 
