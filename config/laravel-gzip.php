@@ -66,7 +66,7 @@ return [
     | Enable logging of compression statistics.
     |
     */
-    'log' => env('GZIP_LOG', true),
+    'log' => env('GZIP_LOG', env('APP_DEBUG', false)),
 
     /*
     |--------------------------------------------------------------------------
