@@ -24,7 +24,7 @@ return [
     | - 9: Slowest, best compression
     |
     */
-    'level' => env('GZIP_LEVEL', 5),
+    'level' => env('GZIP_LEVEL', 6),
 
     /*
     |--------------------------------------------------------------------------
@@ -45,7 +45,7 @@ return [
     | Small responses don't benefit from compression.
     |
     */
-    'minimum_content_length' => env('GZIP_MIN_LENGTH', 1024),
+    'minimum_content_length' => env('GZIP_MIN_LENGTH', 256),
 
     /*
     |--------------------------------------------------------------------------
@@ -76,7 +76,7 @@ return [
     | Skip compression in local development environment.
     |
     */
-    'skip_local' => env('GZIP_SKIP_LOCAL', true),
+    'skip_local' => env('GZIP_SKIP_LOCAL', false),
 
 
     /*
@@ -88,6 +88,17 @@ return [
     |
     */
     'skip_testing' => env('GZIP_SKIP_TESTING', true),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Force Compression
+    |--------------------------------------------------------------------------
+    |
+    | Force compression even if current environment matches skip_local/testing.
+    | Useful for local debugging and checking headers in non-production setups.
+    |
+    */
+    'force' => env('GZIP_FORCE', false),
 
     /*
     |--------------------------------------------------------------------------
@@ -169,6 +180,18 @@ return [
         'image/svg+xml',
         'font/woff2',
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Compress Unknown Content-Type
+    |--------------------------------------------------------------------------
+    |
+    | If the response does not include a Content-Type header, compression can
+    | still be applied. Disable this if your app streams binary payloads
+    | without setting explicit content types.
+    |
+    */
+    'compress_when_content_type_missing' => env('GZIP_COMPRESS_WHEN_CONTENT_TYPE_MISSING', true),
 
     /*
     |--------------------------------------------------------------------------

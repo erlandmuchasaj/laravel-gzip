@@ -82,10 +82,34 @@ protected $middleware = [
 
 
 > [!PS]
-> To see the package working, the application env should be `APP_ENV=production` and the `APP_DEBUG=false`
+> To see the package working in production-like mode, use `APP_ENV=production` (double-check typos) and `APP_DEBUG=false`.
+
+### Important for Laravel v11+ / v12
+
+If compression does not apply after changing environment/config values, clear cached config:
+
+```bash
+php artisan optimize:clear
+```
+
+When testing locally you can force compression:
+
+```env
+GZIP_FORCE=true
+```
 
 
 That's it! Now your responses will be gzipped.
+
+## Troubleshooting
+
+If you still don't see `Content-Encoding: gzip` or `Content-Encoding: br`, check:
+
+1. The request includes `Accept-Encoding: gzip` (or `br`).
+2. Response content is larger than `GZIP_MIN_LENGTH` (default is `256`).
+3. Route/path is not excluded by `excluded_paths`.
+4. MIME type is compressible.
+5. Config cache is cleared (`php artisan optimize:clear`) after env changes.
 
 ## Benchmark
 

@@ -12,14 +12,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 final class GzipEncodeResponse
 {
-    private array $config;
     private ?bool $hasBrotli = null;
     private ?bool $hasGzip = null;
-
-    public function __construct()
-    {
-        $this->config = config('laravel-gzip', []);
-    }
 
     /**
      * Handle an incoming request.
@@ -75,7 +69,7 @@ final class GzipEncodeResponse
                 ->noContent(Response::HTTP_NOT_MODIFIED)
                 ->withHeaders([
                     'ETag' => $etag,
-                    'Content-Encoding' => 'gzip',
+                    'Content-Encoding' => $encoding,
                     'Vary' => 'Accept-Encoding',
                 ]);
         }
@@ -187,6 +181,11 @@ final class GzipEncodeResponse
             return false;
         }
 
+        // Preserve byte ranges and partial content semantics
+        if ($response instanceof Response && ($response->headers->has('Content-Range') || $response->getStatusCode() === Response::HTTP_PARTIAL_CONTENT)) {
+            return false;
+        }
+
         // Don't compress when client sent Range requests (byte ranges)
         if ($request->headers->has('Range')) {
             return false;
@@ -220,8 +219,12 @@ final class GzipEncodeResponse
      */
     private function skipEnvironment(): bool
     {
-        $skipLocal = $this->config['skip_local'] ?? true;
-        $skipTesting = $this->config['skip_testing'] ?? true;
+        if ($this->shouldForceCompression()) {
+            return false;
+        }
+
+        $skipLocal = $this->getConfigValue('skip_local', true);
+        $skipTesting = $this->getConfigValue('skip_testing', true);
 
         if ($skipLocal && app()->isLocal()) {
             return true;
@@ -249,17 +252,7 @@ final class GzipEncodeResponse
      */
     private function clientSupportsCompression(Request $request): bool
     {
-        $acceptEncoding = $request->headers->get('Accept-Encoding', '');
-
-        // Check for Brotli support and gZip
-        if (
-            (str_contains($acceptEncoding, 'br') && $this->hasBrotliSupport()) ||
-            (str_contains($acceptEncoding, 'gzip') && $this->hasGzipSupport())
-        ) {
-            return true;
-        }
-
-        return false;
+        return $this->getBestEncoding($request) !== null;
     }
 
     /**
@@ -290,7 +283,7 @@ final class GzipEncodeResponse
      */
     private function isPathExcluded(Request $request): bool
     {
-        $excludedPaths = $this->config['excluded_paths'] ?? [];
+        $excludedPaths = $this->getConfigValue('excluded_paths', []);
         $currentPath = $request->path();
 
         if (empty($excludedPaths)) {
@@ -313,16 +306,16 @@ final class GzipEncodeResponse
     {
         $contentType = $response->headers->get('Content-Type', '');
         if (empty($contentType)) {
-            return false;
+            return $this->shouldCompressUnknownContentType();
         }
 
-        $nonCompressibleTypes = $this->config['excluded_mime_types'] ?? [];
+        $nonCompressibleTypes = $this->getConfigValue('excluded_mime_types', []);
         if (Str::startsWith($contentType, $nonCompressibleTypes)) {
             return false;
         }
 
         // Only compress known compressible types
-        $compressibleTypes = $this->config['compressible_mime_types'] ?? $this->getDefaultCompressibleTypes();
+        $compressibleTypes = $this->getConfigValue('compressible_mime_types', $this->getDefaultCompressibleTypes());
 
         return $this->matchesMimeType($contentType, $compressibleTypes);
     }
@@ -395,7 +388,7 @@ final class GzipEncodeResponse
         }
 
         $ratio = $compressedSize / $originalSize;
-        $minRatio = $this->config['minimum_compression_ratio'] ?? 0.95;
+        $minRatio = $this->getConfigValue('minimum_compression_ratio', 0.95);
 
         return $ratio < $minRatio;
     }
@@ -428,12 +421,12 @@ final class GzipEncodeResponse
      */
     private function shouldGzipResponse(): bool
     {
-        return (bool) ($this->config['enabled'] ?? true);
+        return (bool) ($this->getConfigValue('enabled', true));
     }
 
     protected function minimumContentLength(): int
     {
-        return (int) ($this->config['minimum_content_length'] ?? 1024);
+        return (int) ($this->getConfigValue('minimum_content_length', 1024));
     }
 
     /**
@@ -442,8 +435,18 @@ final class GzipEncodeResponse
      */
     private function compressLevel(): int
     {
-        $level = (int) ($this->config['level'] ?? 5);
+        $level = (int) ($this->getConfigValue('level', 6));
         return max(1, min(9, $level));
+    }
+
+    private function shouldForceCompression(): bool
+    {
+        return (bool) ($this->getConfigValue('force', false));
+    }
+
+    private function shouldCompressUnknownContentType(): bool
+    {
+        return (bool) ($this->getConfigValue('compress_when_content_type_missing', true));
     }
 
     /**
@@ -451,17 +454,17 @@ final class GzipEncodeResponse
      */
     private function shouldLog(): bool
     {
-        return (bool) ($this->config['log'] ?? false);
+        return (bool) ($this->getConfigValue('log', false));
     }
 
     private function shouldSetCacheControl(): bool
     {
-        return (bool) ($this->config['set_cache_control'] ?? false);
+        return (bool) ($this->getConfigValue('set_cache_control', false));
     }
 
     private function cacheControlMaxAge(): int
     {
-        return (int) ($this->config['cache_max_age'] ?? 86400);
+        return (int) ($this->getConfigValue('cache_max_age', 86400));
     }
 
     /**
@@ -472,23 +475,91 @@ final class GzipEncodeResponse
      */
     private function gzipDebugEnabled(): bool
     {
-        return (bool) ($this->config['debug'] ?? false);
+        return (bool) ($this->getConfigValue('debug', false));
     }
 
     private function getBestEncoding(Request $request): ?string
     {
-        $acceptEncoding = $request->headers->get('Accept-Encoding', '');
+        $acceptedEncodings = $this->parseAcceptEncoding($request);
 
-        // Prefer Brotli over Gzip if supported
-        if (str_contains($acceptEncoding, 'br') && $this->hasBrotliSupport()) {
-            return 'br';
-        }
+        foreach ($acceptedEncodings as $encoding) {
+            if ($encoding === 'br' && $this->hasBrotliSupport()) {
+                return 'br';
+            }
 
-        if (str_contains($acceptEncoding, 'gzip') && $this->hasGzipSupport()) {
-            return 'gzip';
+            if ($encoding === 'gzip' && $this->hasGzipSupport()) {
+                return 'gzip';
+            }
+
+            if ($encoding === '*' && $this->hasBrotliSupport()) {
+                return 'br';
+            }
+
+            if ($encoding === '*' && $this->hasGzipSupport()) {
+                return 'gzip';
+            }
         }
 
         return null;
+    }
+
+    /**
+     * Parse and sort Accept-Encoding values by quality (q) and our preference.
+     *
+     * @return array<int, string>
+     */
+    private function parseAcceptEncoding(Request $request): array
+    {
+        $header = strtolower($request->headers->get('Accept-Encoding', ''));
+
+        if ($header === '') {
+            return [];
+        }
+
+        $encodings = [];
+
+        foreach (explode(',', $header) as $part) {
+            $segments = array_map('trim', explode(';', trim($part)));
+            $encoding = $segments[0] ?? '';
+            if ($encoding === '') {
+                continue;
+            }
+
+            $quality = 1.0;
+            foreach (array_slice($segments, 1) as $parameter) {
+                if (str_starts_with($parameter, 'q=')) {
+                    $quality = (float) substr($parameter, 2);
+                    break;
+                }
+            }
+
+            if ($quality <= 0) {
+                continue;
+            }
+
+            $encodings[] = [
+                'encoding' => $encoding,
+                'q' => $quality,
+                'priority' => match ($encoding) {
+                    'br' => 2,
+                    'gzip' => 1,
+                    '*' => 0,
+                    default => -1,
+                },
+            ];
+        }
+
+        usort($encodings, static fn (array $left, array $right): int =>
+            ($right['q'] <=> $left['q'])
+            ?: ($right['priority'] <=> $left['priority'])
+        );
+
+        return array_values(array_unique(array_column($encodings, 'encoding')));
+    }
+
+    private function getConfigValue(string $key, mixed $default = null): mixed
+    {
+        return config("laravel-gzip.$key", $default);
     }
 
     /**
